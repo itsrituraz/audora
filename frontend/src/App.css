@@ -211,10 +211,14 @@
 }
 
 .navbar {
-  width: 295px;
+  width: var(--sidebar-width);
   height: 100vh;
   box-sizing: border-box;
   padding: 28px 18px 18px;
+  position: sticky;
+  top: 0;
+  flex-shrink: 0;
+  overflow-y: auto;
 
   display: flex;
   flex-direction: column;
@@ -561,6 +565,8 @@
   right: 55px;
 
   width: 210px;
+  max-width: calc(100vw - 32px);
+  box-sizing: border-box;
 
   padding: 8px;
 

@@ -36,7 +36,7 @@ export default function AlbumDetail() {
             )}
 
             {album.musics?.map((track, i) => (
-              <div className="track-row" key={track._id}>
+              <div className="track-row album-track-row" key={track._id}>
                 <div className="track-index">{i + 1}</div>
                 <div className="track-meta">
                   <div className="track-title">{track.title}</div>

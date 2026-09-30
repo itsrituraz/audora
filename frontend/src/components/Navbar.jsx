@@ -1,4 +1,4 @@
-import { NavLink, useNavigate } from "react-router-dom";
+import { NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useEffect, useState } from "react";
 import api from "../api/axios";
@@ -7,11 +7,28 @@ import api from "../api/axios";
 export default function Navbar() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [playlists, setPlaylists] = useState([]);
   const [showCreatePlaylist, setShowCreatePlaylist] =
     useState(false);
   const [playlistName, setPlaylistName] = useState("");
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (mobileOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [mobileOpen]);
 
   useEffect(() => {
     if (!user) return;
@@ -53,16 +70,52 @@ export default function Navbar() {
   }
 
   async function handleLogout() {
+    setMobileOpen(false);
     await logout();
     navigate("/login");
   }
 
   return (
     <>
-      <nav className="navbar">
+      <header className="mobile-header">
+        <div className="mobile-logo">
+          <span>♫</span> Audora
+        </div>
+        <button
+          type="button"
+          className="mobile-hamburger-btn"
+          onClick={() => setMobileOpen(true)}
+          aria-label="Open menu"
+        >
+          ☰
+        </button>
+      </header>
 
-        <h1 className="sidebar-logo">
-          <span>♫</span>  Audora
+      {mobileOpen && (
+        <div
+          className="mobile-nav-overlay"
+          onClick={() => setMobileOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      <nav className={`navbar ${mobileOpen ? "mobile-open" : ""}`}>
+        <div className="mobile-drawer-header">
+          <div className="sidebar-logo">
+            <span>♫</span> Audora
+          </div>
+          <button
+            type="button"
+            className="mobile-close-btn"
+            onClick={() => setMobileOpen(false)}
+            aria-label="Close menu"
+          >
+            ✕
+          </button>
+        </div>
+
+        <h1 className="sidebar-logo desktop-logo">
+          <span>♫</span> Audora
         </h1>
 
         <div className="sidebar-main-links">
@@ -70,6 +123,7 @@ export default function Navbar() {
           <NavLink
             to="/"
             end
+            onClick={() => setMobileOpen(false)}
             className={({ isActive }) =>
               `sidebar-link ${
                 isActive ? "active" : ""
@@ -82,6 +136,7 @@ export default function Navbar() {
 
           <NavLink
             to="/albums"
+            onClick={() => setMobileOpen(false)}
             className={({ isActive }) =>
               `sidebar-link ${
                 isActive ? "active" : ""
@@ -99,6 +154,7 @@ export default function Navbar() {
 
             <NavLink
               to="/my-music"
+              onClick={() => setMobileOpen(false)}
               className={({ isActive }) =>
                 `sidebar-link ${
                   isActive ? "active" : ""
@@ -111,6 +167,7 @@ export default function Navbar() {
 
             <NavLink
               to="/my-albums"
+              onClick={() => setMobileOpen(false)}
               className={({ isActive }) =>
                 `sidebar-link ${
                   isActive ? "active" : ""
@@ -123,6 +180,7 @@ export default function Navbar() {
 
             <NavLink
               to="/upload"
+              onClick={() => setMobileOpen(false)}
               className={({ isActive }) =>
                 `sidebar-link ${
                   isActive ? "active" : ""
@@ -144,6 +202,7 @@ export default function Navbar() {
 
           <NavLink
             to="/liked-songs"
+            onClick={() => setMobileOpen(false)}
             className={({ isActive }) =>
               `library-link ${
                 isActive ? "active" : ""
@@ -180,6 +239,7 @@ export default function Navbar() {
               <NavLink
                 key={playlist._id}
                 to={`/playlists/${playlist._id}`}
+                onClick={() => setMobileOpen(false)}
                 className={({ isActive }) =>
                   `playlist-link ${
                     isActive ? "active" : ""
@@ -215,7 +275,7 @@ export default function Navbar() {
           )}
 
           <button
-            className="btn btn-secondary"
+            className="btn btn-secondary logout-btn"
             onClick={handleLogout}
           >
             Log out
@@ -226,9 +286,15 @@ export default function Navbar() {
       </nav>
 
       {showCreatePlaylist && (
-        <div className="playlist-modal-overlay">
+        <div
+          className="playlist-modal-overlay"
+          onClick={() => setShowCreatePlaylist(false)}
+        >
 
-          <div className="playlist-modal">
+          <div
+            className="playlist-modal"
+            onClick={(e) => e.stopPropagation()}
+          >
 
             <h2>Create Playlist</h2>
 

@@ -4,48 +4,192 @@ const UserModel = require("../models/user.model");
 const playlistModel = require("../models/playlist.model");
 const { uploadFile,deleteFile } = require("../services/storage.service");
 const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
 
 async function createMusic(req, res) {
- const { title,albumId } = req.body;
+  const { title, albumId } = req.body;
   const file = req.file;
-  console.log('File received:', req.file);
 
-  const result = await uploadFile(file.buffer.toString('base64'))
+  // --------------------------------------------------
+  // 1. Basic validation
+  // --------------------------------------------------
 
-  const music = await musicModel.create({
-    uri: result.url,
-    fileId:result.fileId,
-    title,
-    artist: req.user.id,
-  });
-
-  if (albumId) {
-    const album = await albumModel.findById(albumId);
-
-    if (!album) {
-      return res.status(404).json({ message: "Album not found" });
-    }
-
-    // Ownership check - apna hi album hona chahiye
-    if (album.artist.toString() !== req.user.id) {
-      return res.status(403).json({ message: "You don't own this album" });
-    }
-
-    album.musics.push(music._id);
-    await album.save();
+  if (!file) {
+    return res.status(400).json({
+      message: "Music file is required",
+    });
   }
 
+  if (!title || !title.trim()) {
+    return res.status(400).json({
+      message: "Music title is required",
+    });
+  }
 
-  res.status(201).json({
+  // --------------------------------------------------
+  // 2. Daily upload quota
+  // --------------------------------------------------
+
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+
+  const todayUploadCount = await musicModel.countDocuments({
+    artist: req.user.id,
+    uploadedAt: { $gte: startOfDay },
+  });
+
+  if (todayUploadCount >= 50) {
+    return res.status(429).json({
+      message: "Daily upload limit reached. Try again tomorrow.",
+    });
+  }
+
+  // --------------------------------------------------
+  // 3. Generate file hash
+  // --------------------------------------------------
+
+  const fileHash = crypto
+    .createHash("sha256")
+    .update(file.buffer)
+    .digest("hex");
+
+  // --------------------------------------------------
+  // 4. Duplicate file check
+  // --------------------------------------------------
+
+  const existingMusic = await musicModel.findOne({
+    artist: req.user.id,
+    fileHash,
+  });
+
+  if (existingMusic) {
+    return res.status(409).json({
+      message: "This music file has already been uploaded",
+    });
+  }
+
+  // --------------------------------------------------
+  // 5. Album ownership validation
+  // --------------------------------------------------
+
+  let album = null;
+
+  if (albumId) {
+    album = await albumModel.findById(albumId);
+
+    if (!album) {
+      return res.status(404).json({
+        message: "Album not found",
+      });
+    }
+
+    if (album.artist.toString() !== req.user.id) {
+      return res.status(403).json({
+        message: "You don't own this album",
+      });
+    }
+  }
+
+  // --------------------------------------------------
+  // 6. Upload to ImageKit
+  // --------------------------------------------------
+
+  let result;
+
+  try {
+    result = await uploadFile(
+      file.buffer.toString("base64")
+    );
+  } catch (error) {
+    console.error("ImageKit upload failed:", error);
+
+    return res.status(502).json({
+      message: "Music upload failed",
+    });
+  }
+
+  // --------------------------------------------------
+  // 7. Create MongoDB document
+  // --------------------------------------------------
+
+  let music;
+
+  try {
+    music = await musicModel.create({
+      uri: result.url,
+      fileId: result.fileId,
+      fileHash,
+      title: title.trim(),
+      artist: req.user.id,
+
+      uploadedFromIp: req.ip,
+      userAgent: req.get("user-agent"),
+      uploadedAt: new Date(),
+    });
+  } catch (error) {
+    console.error("Music database creation failed:", error);
+
+    // MongoDB failed after ImageKit succeeded.
+    // Remove orphaned ImageKit file.
+    try {
+      await deleteFile(result.fileId);
+    } catch (cleanupError) {
+      console.error(
+        "Failed to cleanup ImageKit file:",
+        cleanupError
+      );
+    }
+
+    return res.status(500).json({
+      message: "Music could not be saved",
+    });
+  }
+
+  // --------------------------------------------------
+  // 8. Add music to album
+  // --------------------------------------------------
+
+  if (album) {
+    try {
+      album.musics.push(music._id);
+      await album.save();
+    } catch (error) {
+      console.error("Album update failed:", error);
+
+      // Rollback music + ImageKit file
+      try {
+        await deleteFile(result.fileId);
+      } catch (cleanupError) {
+        console.error(
+          "Failed to cleanup ImageKit file:",
+          cleanupError
+        );
+      }
+
+      await musicModel.findByIdAndDelete(music._id);
+
+      return res.status(500).json({
+        message: "Music was uploaded but could not be added to album",
+      });
+    }
+  }
+
+  // --------------------------------------------------
+  // 9. Success response
+  // --------------------------------------------------
+
+  return res.status(201).json({
     message: "Music created successfully",
+
     music: {
       id: music._id,
       uri: music.uri,
       title: music.title,
       artist: music.artist,
-    }
-  })
-} 
+    },
+  });
+}
+
 
 
 async function createAlbum(req,res) {
@@ -261,13 +405,22 @@ async function deleteMusic(req, res) {
       message: "Music not found",
     });
   }
+
   if (music.artist.toString() !== req.user.id) {
     return res.status(403).json({
       message: "You don't own this music",
     });
   }
 
-  await deleteFile(music.fileId);
+  try {
+    await deleteFile(music.fileId);
+  } catch (error) {
+    console.error("ImageKit deletion failed:", error);
+
+    return res.status(502).json({
+      message: "Could not delete music file",
+    });
+  }
 
   await musicModel.findByIdAndDelete(musicId);
 
@@ -277,29 +430,16 @@ async function deleteMusic(req, res) {
   );
 
   await playlistModel.updateMany(
-    { musics: musicId},
-    { $pull: {musics: musicId } }
-  )
-
-  await UserModel.updateMany(
-    { likedSongs: musicId},
-    { $pull: {likedSongs: musicId } }
-  );
-
-  res.status(200).json({
-    message: "Music deleted successfully"
-  });
-
-  await deleteFile(music.fileId);
-
-  await musicModel.findByIdAndDelete(musicId);
-
-  await albumModel.updateMany(
     { musics: musicId },
     { $pull: { musics: musicId } }
   );
 
-  res.status(200).json({
+  await UserModel.updateMany(
+    { likedSongs: musicId },
+    { $pull: { likedSongs: musicId } }
+  );
+
+  return res.status(200).json({
     message: "Music deleted successfully",
   });
 }

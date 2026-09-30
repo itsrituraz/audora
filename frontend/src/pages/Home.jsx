@@ -11,8 +11,6 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const [myMusics, setMyMusics] = useState([]);
-  const [myMusicLoading, setMyMusicLoading] = useState(false);
 
   const [playlists, setPlaylists] = useState([]);
   const [showPlaylistMenu, setShowPlaylistMenu] = useState(null);
@@ -61,26 +59,7 @@ export default function Home() {
     });
 }, [user]);
 
-  useEffect(() => {
-    if (user?.role !== "artist") return;
 
-    setMyMusicLoading(true);
-
-    api
-      .get("/music/my")
-      .then(({ data }) => {
-        setMyMusics(data.musics);
-      })
-      .catch((err) => {
-        setError(
-          err.response?.data?.message ||
-            "Could not load your music."
-        );
-      })
-      .finally(() => {
-        setMyMusicLoading(false);
-      });
-  }, [user]);
 
   useEffect(() => {
     if (!user) return;

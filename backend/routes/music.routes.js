@@ -2,14 +2,27 @@ const express = require('express');
 const musicController = require("../controllers/music.controller")
 const authMiddleWare = require("../middlewares/auth.middleware")
 const multer = require('multer');
+const { uploadRateLimiter } = require("../middlewares/rateLimit.middleware");
 
 const upload = multer({
-  storage: multer.memoryStorage()
+  storage: multer.memoryStorage(),
+
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10 MB
+  },
+
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype === "audio/mpeg") {
+      cb(null, true);
+    } else {
+      cb(new Error("Only MP3 files are allowed"));
+    }
+  },
 });
 
 const router = express.Router();
 
-router.post("/upload",authMiddleWare.authArtist,upload.single("music"),musicController.createMusic)
+router.post("/upload",authMiddleWare.authArtist,uploadRateLimiter,upload.single("music"),musicController.createMusic)
 
 router.post("/album",authMiddleWare.authArtist,musicController.createAlbum)
 

@@ -255,8 +255,8 @@ export default function PlaylistDetail() {
          
 
             {showRename && (
-  <div className="playlist-modal-overlay">
-    <div className="playlist-modal rename-modal">
+  <div className="playlist-modal-overlay" onClick={() => setShowRename(false)}>
+    <div className="playlist-modal rename-modal" onClick={(e) => e.stopPropagation()}>
 
       <h2>Rename Playlist</h2>
 

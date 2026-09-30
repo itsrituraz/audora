@@ -7,6 +7,8 @@ const musicRoutes = require("./routes/music.routes");
 const playlistRoutes = require("./routes/playlist.routes");
 
 const app = express();
+app.set("trust proxy", 1);
+
 
 app.use(
   cors({

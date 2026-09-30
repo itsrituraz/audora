@@ -31,7 +31,10 @@ async function registerUser(req, res) {
       id: user._id,
       role: user.role,
     },
-    process.env.JWT_SECRET
+    process.env.JWT_SECRET,
+    {
+      expiresIn: "7d", // Token expires in 7 days
+    }
   );
 
   res.cookie("token", token, {
@@ -80,7 +83,10 @@ async function loginUser(req, res) {
       id: user._id,
       role: user.role,
     },
-    process.env.JWT_SECRET
+    process.env.JWT_SECRET,
+    {
+      expiresIn: "7d", // Token expires in 7 days
+    }
   );
 
   res.cookie("token", token, {
